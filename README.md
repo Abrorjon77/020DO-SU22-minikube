@@ -30,3 +30,4 @@ Directory tree
     ├── redis-deploy.yaml
     └── redis-pod.yaml
 ```
+this is the easy way
