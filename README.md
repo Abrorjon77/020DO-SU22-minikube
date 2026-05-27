@@ -42,19 +42,38 @@ Install the required tools before starting any lab:
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | `brew install kubectl` (macOS) |
 | [Helm](https://helm.sh/docs/intro/install/) | `brew install helm` (macOS) |
 
-Start minikube and verify it is running:
+### Minikube Memory Requirements
+
+No memory limits are defined in the lab manifests, but each lab has real-world resource needs:
+
+| Lab | Memory needed |
+|-----|--------------|
+| MongoDB + webapp | ~512 MB |
+| Redis | ~128 MB |
+| Prometheus + Grafana | ~1.5 GB (heaviest) |
+| cert-manager | ~256 MB |
+
+Start minikube with enough memory for what you plan to run:
 
 ```bash
-minikube start
-minikube status
+# Minimum — individual labs only
+minikube start --memory=2048 --cpus=2
+
+# Recommended — running Prometheus + Grafana or multiple labs at once
+minikube start --memory=4096 --cpus=2
 ```
 
-Expected output:
+Enable the metrics-server addon to monitor resource usage:
+
+```bash
+minikube addons enable metrics-server
+
+# Then check usage
+kubectl top node
+kubectl top pods
 ```
-minikube: Running
-cluster: Running
-kubectl: Correctly Configured: pointing to minikube-vm at 192.168.x.x
-```
+
+Verify minikube is running:
 
 ---
 
