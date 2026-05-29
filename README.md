@@ -177,9 +177,27 @@ kubectl delete deployment/redis configmap/example-redis-config
 
 ## Lab 3 — Prometheus + Grafana (Helm)
 
-**Concepts:** Helm charts, monitoring, dashboards
+**Concepts:** Helm charts, monitoring, dashboards, data sources
 
-### Install Prometheus
+**What it does:**
+- **Prometheus** scrapes metrics from all pods and nodes every 15 seconds and stores them as time-series data
+- **Grafana** connects to Prometheus and displays the data as visual dashboards
+- Together they answer: is my cluster healthy? is anything using too much CPU/memory?
+
+```
+Kubernetes cluster (pods, nodes)
+        │
+        ▼
+   Prometheus  ← scrapes metrics every 15s
+        │
+        ▼
+    Grafana    ← reads from Prometheus, draws graphs
+        │
+        ▼
+  Your browser
+```
+
+### Step 1 — Install Prometheus
 
 ```bash
 # Add the Helm repo
@@ -189,6 +207,9 @@ helm repo update
 # Install Prometheus
 helm install prometheus prometheus-community/prometheus
 
+# Wait for pods to be ready
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus --timeout=120s
+
 # Expose Prometheus and open in browser
 kubectl expose service prometheus-server \
   --type=NodePort --target-port=9090 --name=prometheus-server-np
@@ -196,7 +217,7 @@ kubectl expose service prometheus-server \
 minikube service prometheus-server-np
 ```
 
-### Install Grafana
+### Step 2 — Install Grafana
 
 ```bash
 # Add the Helm repo
@@ -205,6 +226,9 @@ helm repo update
 
 # Install Grafana
 helm install grafana grafana/grafana
+
+# Wait for pod to be ready
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana --timeout=120s
 
 # Get the admin password
 kubectl get secret grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo
@@ -216,20 +240,67 @@ kubectl expose service grafana \
 minikube service grafana-np
 ```
 
-Login with username `admin` and the password from the command above.
+Login with:
+- **Username:** `admin`
+- **Password:** output from the command above
 
-### Configure Grafana
+### Step 3 — Connect Grafana to Prometheus
 
-1. Go to **Configuration > Data Sources** and add a new Prometheus source.
-2. Set the URL to `http://prometheus-server:80`.
-3. Go to **Create (+) > Import** and load dashboard IDs **6417** and **1860**.
-4. Select the Prometheus data source you just created.
+1. In Grafana sidebar → **Connections > Data Sources**
+2. Click **Add new data source** → choose **Prometheus**
+3. Set URL to: `http://prometheus-server:80`
+4. Scroll down → click **Save & Test**
+5. You should see: **"Data source is working"**
 
-Clean up:
+### Step 4 — Import dashboards
+
+1. Sidebar → **Dashboards > Import**
+2. Enter `6417` → click **Load** → select Prometheus → **Import**
+3. Repeat with ID `1860`
+
+These are community dashboards that show full cluster CPU, memory, network, and pod stats.
+
+### Step 5 — Use the Prometheus UI
+
+The Prometheus UI is a raw query interface. Type a query in the search bar and hit **Execute**, then click the **Graph** tab.
+
+Useful queries:
+
+```
+# All running pods
+kube_pod_status_phase{phase="Running"}
+
+# CPU usage per pod
+rate(container_cpu_usage_seconds_total[5m])
+
+# Memory usage per pod
+container_memory_usage_bytes
+
+# Node CPU
+node_cpu_seconds_total
+```
+
+Check scrape targets are healthy:
+- Prometheus UI → **Status > Targets** — all should show green **UP**
+
+### Step 6 — Generate load and watch it in Grafana
+
+```bash
+# Spin up a stress pod to spike CPU
+kubectl run stress --image=busybox --restart=Never -- sh -c "while true; do echo hello; done"
+
+# Watch CPU spike in Grafana dashboards
+
+# Clean up stress pod
+kubectl delete pod stress
+```
+
+### Clean up
 
 ```bash
 helm uninstall prometheus
 helm uninstall grafana
+kubectl delete service prometheus-server-np grafana-np
 ```
 
 ---
